@@ -129,6 +129,10 @@ int main() {
 
 				/*??????????????????????????????????*/
 				/*the first p=p+dp;*/
+				/* the first is not mater */
+				/* can do both at the same time ????????????*/
+				/*1. p=p+dp every epoch */
+				/*2. not every iteration */
 				/*?????????????????????????????????*/
 
 
@@ -156,12 +160,12 @@ int main() {
 						best_p[1] = p[1];
 						best_p[2] = p[2];
 
-						dp[p_index] *= (flag_plusdp||flag_minusdp ? 1.1 : 0.9);
-						
+						//dp[p_index] *= (flag_plusdp||flag_minusdp ? 1.1 : 0.9);
+						dp[p_index] *= 1.1;
 
 						/*if the loop is done(get the best_error), next p_index */
 						p_index += 1;
-						p_index = p_index % 2;
+						p_index = p_index % 3;
 
 						/* prepare for the next p_index */
 						/*?????????????????????????????????*/
@@ -172,21 +176,27 @@ int main() {
 						if (flag_plusdp == true) {
 							flag_plusdp = false;
 							flag_minusdp = true;
+							/*recover the p[p_index] and p -= dp prepare for the minus dp*/
 							p[p_index] -= 2*dp[p_index];
 
 						}
 						else if (flag_minusdp == true) {
-							flag_minusdp = false;
+							flag_minusdp = false;							
+							/*recover the p[p_index]*/
 							p[p_index] += dp[p_index];
+							dp[p_index] *= 0.9;
 
-						}
+							/*???????????????????????????????????????????????????????????????????*/
+							/*need anthor event  is not right */
+/*						}
 						else
-						{	/* next p_index */
+						{*/	
+							/* next p_index */
 							flag_plusdp = true;
 
 							/*if the loop is done(get the best_error), next p_index */
 							p_index += 1;
-							p_index = p_index % 2;
+							p_index = p_index % 3;
 
 							/* prepare for the next p_index */
 							/*?????????????????????????????????*/
@@ -200,6 +210,9 @@ int main() {
 					/*check if the sum(dp) is satisfied the tolerance.*/
 					if (dp[0] + dp[1] + dp[2] < tolerance) {
 						/*get the best p[]*/
+						/*recover the preparation for the next becasuse we have meet the tolerance */
+						p[p_index] -= dp[p_index];
+
 						cout << "##### twiddle completation ! #####" << endl;
 						cout << "best parameter Kp: " << p[0] << " Ki: " << p[1] << " Kd: " << p[2] << endl;
 						ws.close();
