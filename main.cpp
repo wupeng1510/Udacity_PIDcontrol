@@ -38,26 +38,26 @@ int main() {
   /**
    * TODO: Initialize the pid variable.
    */
-  bool twiddle = true;
+  bool twiddle = false;
 
   //double Kp = 0.05, Ki = 0.0001, Kd = 1.5;
   /* get the initial parameter by manual traning each p_index */
 
-  double p[3] = { 0.05,0.0001,1.5 };
-  double dp[3] = { 0.01,0.0001,0.1 };
+  double p[3] = { 0.15,0.0002,2.5 };
+  double dp[3] = { 0.01,0.00001,0.2 };
   //pid.Init(Kp, Ki, Kd);
   double best_p[3] = { p[0],p[1],p[2] };
-  double best_error = 1000000.0;
-  double tolerance = 0.001;
+  double best_error = 10000.0;
+  double tolerance = 0.1;
   /*define the itration counter*/
   int n_iteration = 0;
-  int max_iteration = 1000;
+  int max_iteration = 1400;
   double sum_cte = 0;
 
   bool flag_plusdp = true, flag_minusdp = false;
 
   int p_index = 0;
-
+  int counter= 1;
   pid.Init(p[0], p[1], p[2]);
   if (twiddle == true) {
 	  /*initial the pid parameter*/
@@ -65,12 +65,13 @@ int main() {
   }
   else {
 	  /*the parameter trained by twiddle*/
-	  pid.Init(0.05,0.0001,1.5);
+	  //pid.Init(0.1,0.0001,2);
+    	  pid.Init(0.243679,0.000198,2.02249);
 
   }
   //int iterate
 
-  h.onMessage([&pid,&twiddle,&p,&dp,&tolerance,&n_iteration,&max_iteration,&sum_cte,&best_error,&best_p,&flag_minusdp,&flag_plusdp, &p_index]\
+  h.onMessage([&pid,&twiddle,&p,&dp,&tolerance,&n_iteration,&max_iteration,&sum_cte,&best_error,&best_p,&flag_minusdp,&flag_plusdp, &p_index,&counter]\
 	  (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -111,6 +112,7 @@ int main() {
 				/*n_iteration == 0 is the flag of the start of an epoch */
 				if (n_iteration == 0) {
 					pid.Init(p[0], p[1], p[2]);
+
 				}
 
 				/*sum the second half of the cte error*/
@@ -124,7 +126,9 @@ int main() {
 					steer_value = pid.TotalError();
 					n_iteration++; 
 				}
-
+				if( n_iteration % 200 == 0 ){
+					cout<<"training : n_iteration:"<<n_iteration<<endl;
+				}
 
 
 				/*??????????????????????????????????*/
@@ -144,6 +148,9 @@ int main() {
 					/*motion is done */
 					/*reset the count n_iteration */
 					n_iteration = 0;
+                  
+					cout<<"counter:"<<counter<<endl;
+                  counter++;
 					/*need to judge the best_error and change the dp */
 
 					/* main twiddle function */
@@ -151,10 +158,11 @@ int main() {
 					double error = sum_cte / max_iteration * 2;
 					/* reset the sum_ste */
 					sum_cte = 0.0;
-
+					
 					/*because the main process is triggerred by the event of new cte message from the simular*/
 					/*Need to distinguish the plusdp,minusdp(increase dp),or need to decrease dp*/					
 					if (error < best_error) {
+						cout<<"The epoch get a new best_error,update p, dp=*1.1"<<endl;
 						best_error = error;
 						best_p[0] = p[0];
 						best_p[1] = p[1];
@@ -170,10 +178,13 @@ int main() {
 						/* prepare for the next p_index */
 						/*?????????????????????????????????*/
 						p[p_index] += dp[p_index];
+						flag_plusdp = true;
+						flag_minusdp = false;                      
 					}
 					else {
 						/* didnt get a new best_error */
 						if (flag_plusdp == true) {
+							cout<<"plusdp cant get a new best_error, recover p and try minusdp."<<endl;
 							flag_plusdp = false;
 							flag_minusdp = true;
 							/*recover the p[p_index] and p -= dp prepare for the minus dp*/
@@ -181,6 +192,7 @@ int main() {
 
 						}
 						else if (flag_minusdp == true) {
+							cout<<"good news, minusdp also cant get a new best_error, recover p, dp *=0.9 ,next p_index."<<endl;                          
 							flag_minusdp = false;							
 							/*recover the p[p_index]*/
 							p[p_index] += dp[p_index];
@@ -204,9 +216,11 @@ int main() {
 						}
 
 					}
-
+					
 					/*until the p_index reach the 2th, reset the p_index*/
-
+                  
+					cout<<" error: "<<error<<" best_error: "<<best_error<<endl;
+               
 					/*check if the sum(dp) is satisfied the tolerance.*/
 					if (dp[0] + dp[1] + dp[2] < tolerance) {
 						/*get the best p[]*/
@@ -214,10 +228,13 @@ int main() {
 						p[p_index] -= dp[p_index];
 
 						cout << "##### twiddle completation ! #####" << endl;
-						cout << "best parameter Kp: " << p[0] << " Ki: " << p[1] << " Kd: " << p[2] << endl;
+						cout << "best parameter Kp: " << best_p[0] << " Ki: " << best_p[1] << " Kd: " << best_p[2] << endl;
 						ws.close();
 					}
 					else {
+						cout << "##### training #####" << "  the p_index is(has added the dp and ready to training) : "<<p_index<< endl;
+						cout << "temp parameter Kp: " << p[0] << " Ki: " << p[1] << " Kd: " << p[2] << endl;  
+                cout << "temp parameter Kdp: " << dp[0] << " Kdi: " << dp[1] << " Kdd: " << dp[2] << endl;
 						string reset_msg = "42[\"reset\",{}]";
 						ws.send(reset_msg.data(), reset_msg.length(), uWS::OpCode::TEXT);
 					}
@@ -228,10 +245,23 @@ int main() {
 
 
 					//json msgJson;
+                  //cout<<"abe(cte) : "<<abs(cte)<<" abs(steering_angle): "<<abs(steer_value)<<endl;
 					msgJson["steering_angle"] = steer_value;
-					msgJson["throttle"] = 0.3;
+                  /*
+					if (abs(cte)>1){
+						cout<<"abe(cte) : "<<abs(cte)<<" abs(steering_angle): "<<abs(steer_value)<<endl;
+						msgJson["throttle"] = 0.1; 
+                    }
+					else if (abs(cte)<0.5){
+					msgJson["throttle"] = 0.5;
+                  }
+					else{
+					msgJson["throttle"] = 0.3; 
+                  }
+                  */
+					msgJson["throttle"] = 0.3;                  
 					auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-					std::cout << msg << std::endl;
+					//std::cout << msg << std::endl;
 					ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
 				}
 			}
@@ -248,12 +278,12 @@ int main() {
 				steer_value = pid.TotalError();
 			
 			// DEBUG
-			cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
+			//cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
 			
 			msgJson["steering_angle"] = steer_value;
 			msgJson["throttle"] = 0.3;
 			auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-			std::cout << msg << std::endl;
+			//std::cout << msg << std::endl;
 			ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
 			}
         }  // end "telemetry" if
@@ -264,7 +294,6 @@ int main() {
       }
     }  // end websocket message if
   }); // end h.onMessage
-
   h.onConnection([&h](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
     std::cout << "Connected!!!" << std::endl;
   });
